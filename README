@@ -1,0 +1,61 @@
+Experimental Gradle build for Grails
+------------------------------------
+
+There is already a simple Gradle plugin that enables you to build Grails
+projects: grails-gradle-plugin. However, that one delegates most of the
+work to the Grails build system.
+
+This project is a new, experimental Gradle plugin that builds Grails
+projects natively, without using the Grails build system at all. This
+makes for a more powerful and flexible build. It also give Grails plugins
+much more flexibility when interacting with the build.
+
+The rationale behind this project is that the Grails build system is
+gradually doing more and more of the stuff that Gradle already handles
+out of the box. Not only that, but a Grails project is really just a
+WAR project with a unique directory structure. Gradle's concept of source
+sets now means that the directory structure can be handled by the standard
+Gradle tasks.
+
+By using Gradle, we can greatly simplify the Grails build system while
+taking advantage of a very powerful API.
+
+
+Building the plugin
+-------------------
+
+In order to build and package the plugin, you need at least Gradle 0.9,
+which may mean grabbing a snapshot:
+
+  http://teamcity.jetbrains.com/viewLog.html?buildId=lastSuccessful&buildTypeId=bt41&tab=artifacts
+
+When asked to log in, simply select "Login as guest".
+
+Once you have Gradle installed, all you have to do is run
+
+  gradle assemble
+
+from the project's root directory.
+
+
+Using the plugin
+----------------
+
+At the moment, the plugin is not published to a repository, so trying it
+out is tricky. Here's how I do it: create a Gradle build script in the
+root of your Grails project that contains
+
+  buildscript {
+      repositories {
+          mavenCentral()
+          flatDir dirs: "/path/to/grails-build-x/build/libs"
+      } 
+
+      dependencies {
+          classpath "org.grails:grails-bootstrap:1.2.0", "org.grails:grails-core:1.2.0", ":grails-build-x:"
+      }
+  }
+
+  apply id: 'grails-x'
+
+Then run 'gradle run'. Lots of stuff doesn't work yet, but it will come. 
