@@ -1,0 +1,280 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "org.grails:grails-bootstrap:${grailsVersion}"
+    }
+}
+
+apply id: 'groovy'
+
+configurations {
+    plugin { transitive = false }
+    provided { transitive = false }
+}
+
+task grailsHomeCheck {
+    def grailsHomePath = System.getenv("GRAILS_HOME")
+    project.isGrailsHomeSet = grailsHomePath != null
+    project.grailsHome = grailsHomePath ? new File(grailsHomePath) : null
+}
+
+task updateClasspaths(dependsOn: grailsHomeCheck) {
+    def buildSettings = new grails.util.BuildSettings(grailsHome, projectDir)
+    buildSettings.rootLoader = getClass().classLoader
+
+    // TODO Legacy code: we have to make sure that the project 'plugins'
+    // directory exist, otherwise Grails 1.2 and earlier bomb when loading
+    // the build configuration.
+    ant.mkdir dir: buildSettings.projectPluginsDir
+    // End legacy
+
+    if (${inPlacePlugin}) {
+        buildSettings.loadConfig()
+    }
+    else {
+        buildSettings.loadConfig(new File(projectDir, "dependencies.groovy"))
+    }
+
+    def depsConf = buildSettings.config.grails.project.dependency.resolution
+    if (depsConf) {
+        // This is not the same syntax as Gradle's (I think it's an old
+        // syntax), so we have to convert.
+        def adapter = new GrailsGradleProjectAdapter(project, "${grailsVersion}")
+        depsConf = depsConf.clone()
+        depsConf.resolveStrategy = Closure.DELEGATE_FIRST
+        depsConf.delegate = adapter
+        depsConf.call()
+    }
+    else {
+        def adapter = new GrailsGradleProjectAdapter(project, "${grailsVersion}")
+        adapter.inherits("global")
+    }
+
+    project.dependencies {
+        compile project.fileTree("lib").matching { include "*.jar" }
+    }
+}
+
+sourceSets {
+    main {
+        groovy {
+            srcDir(".").include("*GrailsPlugin.groovy", "src/java/**/*", "src/groovy/**/*", "grails-app/**/*")
+            compileClasspath += configurations.provided
+        }
+    }
+    plugin {
+        groovy {
+            srcDir "src/plugin"
+            compileClasspath = main.runtimeClasspath.filter { it != null} + configurations.plugin + configurations.provided
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    groovy  "org.codehaus.groovy:groovy-all:1.6.7"
+    plugin  gradleApi(), "org.grails:grails-bootstrap:${grailsVersion}"
+
+    // TODO Plugins should probably be compiled against Grails core
+    // by default at least.
+//    compile "org.grails:grails-core:${grailsVersion}"
+
+    // Required by Grails' AST transformations.
+    provided "commons-lang:commons-lang:2.4",
+             "javax.servlet:servlet-api:2.5",
+             "log4j:log4j:1.2.14",
+             "org.grails:grails-bootstrap:1.2.0",
+             "org.grails:grails-spring:1.2.0",
+             "org.slf4j:slf4j-api:1.5.8",
+             "org.slf4j:slf4j-jdk14:1.5.8",
+             "org.slf4j:jcl-over-slf4j:1.5.8",
+             "org.springframework:spring-core:3.0.0.RELEASE",
+             "org.springframework:spring-web:3.0.0.RELEASE"
+}
+
+compileJava.dependsOn updateClasspaths
+
+compileGroovy.doFirst {
+    sourceSets.main.compileClasspath.each {
+        println ">> Compile cp: \${it}"
+    }
+}
+
+task exportedClasses(dependsOn: pluginClasses) << {
+    for (f in sourceSets.main.runtimeClasspath) {
+        println ">> Runtime cp: \$f"
+    }
+}
+
+
+class GrailsGradleProjectAdapter {
+    Project project
+    String grailsVersion
+
+    def repositoryAdapter
+    def dependencyAdapter
+
+    boolean convertToProvided
+
+    GrailsGradleProjectAdapter(Project project, String grailsVersion) {
+        this.project = project
+        this.grailsVersion = grailsVersion
+    }
+
+    void inherits(String name, Closure c = null) {
+        if (name == "global") {
+            convertToProvided = true
+
+            def global = org.codehaus.groovy.grails.resolve.IvyDependencyManager.getDefaultDependencies(grailsVersion)
+            global = global.clone()
+            global.resolveStrategy = Closure.DELEGATE_FIRST
+            global.delegate = this
+            global.call()
+
+            convertToProvided = false
+        }
+    }
+
+    void log(String level) {
+        // Ignore.
+    }
+
+    void repositories(Closure c) {
+        project.repositories {
+            if (!repositoryAdapter) repositoryAdapter = new RepositoryHandlerAdapter(delegate)
+            else repositoryAdapter.delegate = delegate
+            c = c.clone()
+            c.resolveStrategy = Closure.DELEGATE_FIRST
+            c.delegate = repositoryAdapter
+            c.call()
+        }
+    }
+
+    void dependencies(Closure c) {
+        project.dependencies {
+            def dependencyAdapter = new DependencyHandlerAdapter(delegate, convertToProvided)
+//            else dependencyAdapter.delegate = delegate
+            c = c.clone()
+            c.resolveStrategy = Closure.DELEGATE_FIRST
+            c.delegate = dependencyAdapter
+            c.call()
+        }
+    }
+
+    def methodMissing(String name, args) {
+        return project."\${name}"(*args)
+    }
+
+    def propertyMissing(String name) {
+        return project."\${name}"
+    }
+
+    void propertyMissing(String name, value) {
+        project."\${name}" = value
+    }
+}
+
+class DependencyHandlerAdapter {
+    def delegate
+    def convertToProvided
+
+    DependencyHandlerAdapter(delegate, convertToProvided = false) {
+        this.delegate = delegate
+        this.convertToProvided = convertToProvided
+    }
+
+    void excludes(Object[] args) {
+        // Ignore for now because I can't get it working.
+//        args.each { delegate.exclude(module: it) }
+    }
+
+    void build(Object[] args) {
+        toCompileConfig(*args)
+    }
+
+    void provided(Object[] args) {
+        toCompileConfig(*args)
+    }
+
+    void runtime(Object[] args) {
+        if (convertToProvided) this.methodMissing("provided", args)
+        else {
+            println ">> Runtime dependency: \$args"
+            this.methodMissing("runtime", args)
+        }
+    }
+
+    void test(Object[] args) {
+        this.testCompile(*args)
+    }
+
+    void toCompileConfig(Object[] args) {
+        if (convertToProvided) this.methodMissing("provided", args)
+        else this.compile(*args)
+    }
+
+    def methodMissing(String name, args) {
+        // We can't handle closures on dependencies yet.
+        if (args[-1] instanceof Closure) args = args[0..-2]
+        return delegate."\${name}"(*args)
+    }
+
+    def propertyMissing(String name) {
+        return delegate."\${name}"
+    }
+
+    void propertyMissing(String name, value) {
+        delegate."\${name}" = value
+    }
+}
+
+class RepositoryHandlerAdapter {
+    def delegate
+    boolean grailsHomeAllowed = true
+
+    RepositoryHandlerAdapter(delegate) {
+        this.delegate = delegate
+    }
+
+    void grailsHome() {
+        // May be called more than once if a project declares it and
+        // also inherits "global".
+        if (grailsHomeAllowed) {
+            delegate.flatDir(dirs: [ "${grailsHome.absolutePath}/lib", "${grailsHome.absolutePath}/dist" ])
+            grailsHomeAllowed = false
+        }
+    }
+
+    void grailsPlugins() {
+    }
+
+    void mavenCentral() {
+        // Already added by the build script, so ignore.
+    }
+
+    void mavenLocal() {
+        // Don't know how to support this one.
+    }
+
+    void mavenRepo(String url) {
+        delegate.mavenRepo(urls: url)
+    }
+
+    def methodMissing(String name, args) {
+        return delegate."\${name}"(*args)
+    }
+
+    def propertyMissing(String name) {
+        return delegate."\${name}"
+    }
+
+    void propertyMissing(String name, value) {
+        delegate."\${name}" = value
+    }
+}

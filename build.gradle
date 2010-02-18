@@ -1,0 +1,39 @@
+apply id: 'groovy'
+
+configurations {
+    provided { transitive = false }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    groovy "org.codehaus.groovy:groovy:1.7.0"
+
+    compile configurations.groovy,
+            gradleApi(),
+            "org.grails:grails-bootstrap:1.2.0",
+            "org.grails:grails-core:1.2.0",
+            "org.grails:grails-spring:1.2.0",
+            "org.springframework:spring-context:3.0.0.RELEASE",
+            "org.springframework:spring-core:3.0.0.RELEASE"
+
+    runtime "org.grails:grails-resources:1.2.0"
+
+    provided "javax.servlet:servlet-api:2.5"
+    
+    // Required by the Groovy compiler, but the code has no explicit
+    // dependency on these.
+    provided "org.springframework:spring-beans:3.0.0.RELEASE"
+
+    // Required by Grails' AST transformations, which are included in
+    // grails-core.
+    provided "commons-lang:commons-lang:2.4",
+             "org.slf4j:slf4j-api:1.5.8",
+             "org.slf4j:slf4j-jdk14:1.5.8",
+             "org.slf4j:jcl-over-slf4j:1.5.8",
+             "org.springframework:spring-web:3.0.0.RELEASE"
+}
+
+sourceSets.main.compileClasspath += configurations.provided
