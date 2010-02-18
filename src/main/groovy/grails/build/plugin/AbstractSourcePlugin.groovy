@@ -1,6 +1,6 @@
 package grails.build.plugin
 
-abstract class AbstractSourcePlugin extends AbstractPlugin {
+abstract class AbstractSourcePlugin extends AbstractPlugin implements SourcePlugin {
     private final File dir
     private Set<File> runtimeClasspath
     private pluginDescriptor

@@ -15,4 +15,5 @@ class InstalledSourcePlugin extends AbstractSourcePlugin {
 
     String getName() { return name }
     String getVersion() { return version }
+    File getBuildConfigFile() { return new File(pluginDirectory, "dependencies.groovy") }
 }

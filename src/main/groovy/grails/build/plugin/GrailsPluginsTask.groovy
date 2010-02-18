@@ -103,7 +103,7 @@ Grails settings: Base dir = ${settings.baseDir}
             //
             // Load the plugin's BuildConfig.groovy file to find out whether
             // there is an associated Gradle plugin.
-            def pluginConfig = loadBuildConfig(pluginProject.projectDir, metadata, settings)
+            def pluginConfig = loadBuildConfig(plugin, metadata, settings)
             if (pluginConfig?.plugin?.buildPluginClass) {
                 // We will load the plugin within the context of the plugin's
                 // runtime classpath.
@@ -155,10 +155,11 @@ Grails settings: Base dir = ${settings.baseDir}
         return metadata
     }
 
-    private loadBuildConfig(File baseDir, metadata, settings) {
+    private loadBuildConfig(plugin, metadata, settings) {
         // Now prepare a slurper to load the BuildConfig.groovy. This
         // involves add various properties to the binding so that the
         // BuildConfig.groovy file has access to them.
+        def baseDir = plugin.pluginDirectory
         def slurper = new ConfigSlurper()
         slurper.setBinding(
                 basedir: baseDir.path,
@@ -174,7 +175,7 @@ Grails settings: Base dir = ${settings.baseDir}
         // Finally, load the BuildConfig.groovy file.
         // TODO Make the relative path to build config file a static
         // constant.
-        def pluginConfigFile = new File(baseDir, "grails-app/conf/BuildConfig.groovy")
+        def pluginConfigFile = plugin.buildConfigFile
         if (pluginConfigFile.exists()) {
             return slurper.parse(pluginConfigFile.toURI().toURL())
         }
