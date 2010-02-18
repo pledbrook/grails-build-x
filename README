@@ -58,4 +58,6 @@ root of your Grails project that contains
 
   apply id: 'grails-x'
 
-Then run 'gradle run'. Lots of stuff doesn't work yet, but it will come. 
+You should also install the Jetty plugin from the package in the root of
+this project. Then run 'gradle run'. Lots of stuff doesn't work yet, but
+it will come. 
