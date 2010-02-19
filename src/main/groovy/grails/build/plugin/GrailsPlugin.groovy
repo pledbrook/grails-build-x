@@ -4,6 +4,8 @@ import groovy.xml.DOMBuilder
 import org.codehaus.groovy.tools.RootLoader
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.Copy
+import org.gradle.api.internal.file.copy.FileCopyActionImpl
 
 class GrailsPlugin implements Plugin<Project> {
     void use(Project project) {
@@ -101,16 +103,21 @@ class GrailsPlugin implements Plugin<Project> {
             createCopyWebXmlTemplateTask(project, [ buildData, buildPlugins, tmpBuildDir ])
             createGenerateWebXmlTask(project, [ copyWebXmlTemplate ])
             createGenerateApplicationContextTask(project, [ buildData, buildPlugins ])
+            createPackageI18nTask(project, [ buildData ])
             createRunTask(project, [ compileGroovy, processResources ])
 
             compileGroovy.source sourceSets.main.groovy
             compileGroovy.source projectDir.listFiles({ f ->
                 f.name ==~ /\w+GrailsPlugin.groovy/ } as FileFilter)
 
+            // The i18n and JSP files have to be included in the runtime
+            // classpath, so we add the 'resources' directory now.
+            sourceSets.main.runtimeClasspath += files(packageI18n.destinationDir)
+
             // Configure some of the tasks provided by other plugins. The
             // compile steps require the Grails plugins to be built first.
             compileJava.dependsOn buildPlugins
-            processResources.dependsOn generateWebXml, generateApplicationContextXml
+            processResources.dependsOn generateWebXml, generateApplicationContextXml, packageI18n
 
             war {
                 from webAppDir
@@ -289,6 +296,25 @@ class GrailsPlugin implements Plugin<Project> {
                     writeDomToFile(dom, destFile)
                 }
             }
+        }
+    }
+
+    /**
+     * Creates a task that copies all the project's message bundles to
+     * build/resources. If 'native2ascii' is enabled, then that tool is
+     * used to convert the files from UTF-8 to ASCII en route.
+     */
+    private createPackageI18nTask(project, dependsOn) {
+        project.task("packageI18n", type: Copy, dependsOn: dependsOn) {
+            def buildConfig = project.buildData.settings.config
+            if (buildConfig.grails.enable.native2ascii) {
+                copyAction = new FileCopyActionImpl(project.fileResolver, new Native2AsciiCopySpecVisitor())
+            }
+
+            from(".") {
+                include "grails-app/i18n/**/*.properties"
+            }
+            into new File(project.buildDir, "resources")
         }
     }
 

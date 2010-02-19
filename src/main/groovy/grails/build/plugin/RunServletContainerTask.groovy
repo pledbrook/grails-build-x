@@ -1,5 +1,6 @@
 package grails.build.plugin
 
+import grails.util.BuildSettings
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
 
@@ -57,6 +58,13 @@ class RunServletContainerTask extends DefaultTask {
             println ">> Server runtime classpath: ${it}"
             it.toURI().toURL()
         }
+
+        // TODO Add support for custom reload settings.
+
+        // TODO Legacy: Environment.getReloadLocationInternal() requires
+        // the "base.dir" system property to be set. Argh! If it isn't,
+        // Grails quietly fails to load the i18n resource bundles.
+        System.setProperty(BuildSettings.APP_BASE_DIR, project.projectDir.absolutePath)
 
         def grailsServer = serverFactory.createInline(
                 project.war.webAppDir.absolutePath,
