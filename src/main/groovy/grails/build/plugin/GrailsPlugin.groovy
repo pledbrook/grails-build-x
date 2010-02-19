@@ -130,35 +130,28 @@ class GrailsPlugin implements Plugin<Project> {
     private createBuildDataTask(project) {
         project.with {
             task("buildData") {
-                appName = "unspecified"
-                appVersion = project.version
-                grailsVersion = "unspecified"
-                servletContext = appName
-                servletVersion = "2.4"
-                doLast {
-                    // Start by loading the application metadata from 
-                    // application.properties.
-                    def metadata = new Properties()
-                    metadata.load(file("application.properties").newReader())
+                // Start by loading the application metadata from
+                // application.properties.
+                def metadata = new Properties()
+                metadata.load(file("application.properties").newReader())
 
-                    appName = metadata.getProperty("app.name")
-                    appVersion = metadata.getProperty("app.version")
-                    servletContext = metadata.getProperty("app.context")
-                    servletVersion = metadata.getProperty("app.servlet.version")
+                appName = metadata.getProperty("app.name")
+                appVersion = metadata.getProperty("app.version")
+                servletContext = metadata.getProperty("app.context")
+                servletVersion = metadata.getProperty("app.servlet.version")
 
-                    // Next, load up the build settings, which involves
-                    // loading and parsing BuildConfig.groovy. The root
-                    // loader is set to the build classpath, which has
-                    // far fewer JARs than the old Grails build system
-                    // classpath.
-                    settings = new grails.util.BuildSettings(grailsHome ? new File(grailsHome) : null, projectDir)
-                    settings.rootLoader = getClass().classLoader
-                    settings.loadConfig()
+                // Next, load up the build settings, which involves
+                // loading and parsing BuildConfig.groovy. The root
+                // loader is set to the build classpath, which has
+                // far fewer JARs than the old Grails build system
+                // classpath.
+                settings = new grails.util.BuildSettings(grailsHome ? new File(grailsHome) : null, projectDir)
+                settings.rootLoader = getClass().classLoader
+                settings.loadConfig()
 
-                    // TODO Legacy stuff! Code should not be picking up build settings
-                    // from this static variable.
-                    grails.util.BuildSettingsHolder.settings = settings
-                }
+                // TODO Legacy stuff! Code should not be picking up build settings
+                // from this static variable.
+                grails.util.BuildSettingsHolder.settings = settings
             }
         }
     }
