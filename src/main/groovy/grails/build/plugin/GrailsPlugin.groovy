@@ -120,6 +120,14 @@ class GrailsPlugin implements Plugin<Project> {
             compileJava.dependsOn buildPlugins
             processResources.dependsOn generateWebXml, generateApplicationContextXml, copyJsps, packageI18n
 
+            // We generate some files to web-app/WEB-INF, so we should clear
+            // those out on 'clean'.
+            clean.doLast {
+                ant.delete(file: generateWebXml.targetFile)
+                ant.delete(file: generateApplicationContextXml.targetFile)
+                ant.delete(dir: new File(war.webAppDir, "WEB-INF/grails-app"))
+            }
+
             war {
                 from webAppDir
                 webXml = generateWebXml.targetFile
@@ -235,7 +243,7 @@ class GrailsPlugin implements Plugin<Project> {
         project.with {
             task("generateApplicationContextXml", dependsOn: dependsOn) {
                 template = "applicationContext.xml"
-                destFile = new File(war.webAppDir, "WEB-INF/applicationContext.xml")
+                targetFile = new File(war.webAppDir, "WEB-INF/applicationContext.xml")
 
                 doLast {
                     // Start by loading the template XML file into a DOM tree.
@@ -287,7 +295,7 @@ class GrailsPlugin implements Plugin<Project> {
                     }
 
                     // Finally, write the modified DOM to the destination.
-                    writeDomToFile(dom, destFile)
+                    writeDomToFile(dom, targetFile)
                 }
             }
         }
