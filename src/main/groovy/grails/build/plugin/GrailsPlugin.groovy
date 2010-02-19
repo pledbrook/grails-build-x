@@ -103,6 +103,7 @@ class GrailsPlugin implements Plugin<Project> {
             createCopyWebXmlTemplateTask(project, [ buildData, buildPlugins, tmpBuildDir ])
             createGenerateWebXmlTask(project, [ copyWebXmlTemplate ])
             createGenerateApplicationContextTask(project, [ buildData, buildPlugins ])
+            createCopyJspsTask(project, [])
             createPackageI18nTask(project, [ buildData ])
             createRunTask(project, [ compileGroovy, processResources ])
 
@@ -117,7 +118,7 @@ class GrailsPlugin implements Plugin<Project> {
             // Configure some of the tasks provided by other plugins. The
             // compile steps require the Grails plugins to be built first.
             compileJava.dependsOn buildPlugins
-            processResources.dependsOn generateWebXml, generateApplicationContextXml, packageI18n
+            processResources.dependsOn generateWebXml, generateApplicationContextXml, copyJsps, packageI18n
 
             war {
                 from webAppDir
@@ -289,6 +290,20 @@ class GrailsPlugin implements Plugin<Project> {
                     writeDomToFile(dom, destFile)
                 }
             }
+        }
+    }
+
+    /**
+     * For the 'run' task to work with JSP files, they must be copied
+     * from the project's grails-app/views directory to web-app/WEB-INF.
+     */
+    private createCopyJspsTask(project, dependsOn) {
+        project.task("copyJsps", type: Copy, dependsOn: dependsOn) {
+            from(".") {
+                include "grails-app/views/**/*.jsp"
+            }
+
+            into new File(project.war.webAppDir, "WEB-INF")
         }
     }
 
