@@ -83,7 +83,7 @@ dependencies {
 
     // TODO Plugins should probably be compiled against Grails core
     // by default at least.
-//    compile "org.grails:grails-core:${grailsVersion}"
+    compile "org.grails:grails-core:${grailsVersion}"
 
     // Required by Grails' AST transformations.
     provided "commons-lang:commons-lang:2.4",
@@ -149,7 +149,6 @@ class GrailsGradleProjectAdapter {
     void dependencies(Closure c) {
         project.dependencies {
             def dependencyAdapter = new DependencyHandlerAdapter(delegate, convertToProvided)
-//            else dependencyAdapter.delegate = delegate
             c = c.clone()
             c.resolveStrategy = Closure.DELEGATE_FIRST
             c.delegate = dependencyAdapter
