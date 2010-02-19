@@ -100,17 +100,7 @@ dependencies {
 
 compileJava.dependsOn updateClasspaths
 
-compileGroovy.doFirst {
-    sourceSets.main.compileClasspath.each {
-        println ">> Compile cp: \${it}"
-    }
-}
-
-task exportedClasses(dependsOn: pluginClasses) << {
-    for (f in sourceSets.main.runtimeClasspath) {
-        println ">> Runtime cp: \$f"
-    }
-}
+task exportedClasses(dependsOn: pluginClasses)
 
 
 class GrailsGradleProjectAdapter {

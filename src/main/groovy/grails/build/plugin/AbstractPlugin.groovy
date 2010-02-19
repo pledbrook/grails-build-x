@@ -37,7 +37,6 @@ abstract class AbstractPlugin implements Plugin {
     }
 
     void doWithWebDescriptor(xml) {
-        println ">> doWithWebDescriptor for plugin ${name}"
         def pd = pluginDescriptor
         initWatchedResources(pd)
 
