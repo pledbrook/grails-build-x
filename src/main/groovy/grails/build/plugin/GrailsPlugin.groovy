@@ -9,6 +9,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.Copy
 import org.gradle.api.internal.file.copy.FileCopyActionImpl
+import org.gradle.api.file.FileCollection
 
 class GrailsPlugin implements Plugin<Project> {
     File metadataFile
@@ -297,30 +298,20 @@ class GrailsPlugin implements Plugin<Project> {
                 destFile = new File(tmpBuildDir.dir, "web.xml.tmp")
 
                 doLast {
-                    def templateStream
                     def localTemplate = file("${localWarTemplatesPath}/${template}")
                     if (localTemplate.exists()) {
                         // Copy the local template web descriptor.
-                        localTemplate.newInputStream()
+                        copyToFile(localTemplate.newInputStream(), destFile)
                     }
                     else {
-                        template = "web${buildData.servletVersion}.template.xml"
-
                         // Copy the file from the classpath.
-                        def cl = new RootLoader(
-                                configurations.resources.files.collect { it.toURI().toURL() } as URL[],
-                                ClassLoader.getSystemClassLoader())
-                        templateStream = cl.getResource("${grailsWarTemplatesPath}/${template}").openStream()
-                    }
+                        template = "web${buildData.servletVersion}.template.xml"
+                        copyToFile(
+                                resourceAsStream(
+                                        configurations.resources,
+                                        "${grailsWarTemplatesPath}/${template}"),
+                                destFile)
 
-                    // Perform the copy.
-                    def buf = new byte[8192]
-                    templateStream.withStream { input ->
-                        destFile.withOutputStream { output ->
-                            for (int bytesRead = input.read(buf); bytesRead != -1; bytesRead = input.read(buf)) {
-                                output.write(buf, 0, bytesRead)
-                            }
-                        }
                     }
                 }
             }
@@ -374,11 +365,10 @@ class GrailsPlugin implements Plugin<Project> {
                     }
                     else {
                         // Copy the file from the classpath.
-                        def cl = new RootLoader(
-                                configurations.resources.files.collect { it.toURI().toURL() } as URL[],
-                                ClassLoader.getSystemClassLoader())
-                        def template = cl.getResource("${copyWebXmlTemplate.grailsWarTemplatesPath}/${template}")
-                        dom = DOMBuilder.parse(template.openStream().newReader())
+                        def templateStream = resourceAsStream(
+                                configurations.resources,
+                                "${copyWebXmlTemplate.grailsWarTemplatesPath}/${template}")
+                        dom = DOMBuilder.parse(templateStream.newReader())
                     }
 
                     // Add the generated bean definitions for 'grailsApplication'
@@ -478,5 +468,45 @@ class GrailsPlugin implements Plugin<Project> {
         transformer.transform(
                 new javax.xml.transform.dom.DOMSource(dom),
                 new javax.xml.transform.stream.StreamResult(destFile))
+    }
+
+    /**
+     * Copies the data from a stream to a file using a buffer. The input
+     * stream and file are automatically closed once the copy ends.
+     * @param i The input stream to copy from.
+     * @param destFile The file to copy to.
+     */
+    private void copyToFile(InputStream i, File destFile) {
+        copyToStream(i, destFile.newOutputStream())
+    }
+
+    /**
+     * Copies the data from one stream to another using a buffer. The
+     * streams are automatically closed once the copy ends.
+     * @param i The input stream to copy from.
+     * @param o The output stream to copy to.
+     */
+    private void copyToStream(InputStream i, OutputStream o) {
+        def buf = new byte[8192]
+        i.withStream { input ->
+            o.withStream { output ->
+                for (int bytesRead = input.read(buf); bytesRead != -1; bytesRead = input.read(buf)) {
+                    output.write(buf, 0, bytesRead)
+                }
+            }
+        }
+    }
+
+    /**
+     * Opens a resource from a given classpath, returning the resource
+     * as an input stream.
+     * @param cp The classpath to load the resource from.
+     * @param path The relative path to the particular resource you want.
+     */
+    private InputStream resourceAsStream(FileCollection cp, String path) {
+        def cl = new RootLoader(
+                cp.files.collect { it.toURI().toURL() } as URL[],
+                ClassLoader.getSystemClassLoader())
+        return cl.getResource(path).openStream()
     }
 }
