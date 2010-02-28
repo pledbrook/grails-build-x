@@ -2,10 +2,13 @@ apply id: 'groovy'
 
 configurations {
     provided { transitive = false }
+    itCompile { transitive = false}
+    itRuntime.extendsFrom itCompile
 }
 
 repositories {
     mavenCentral()
+    flatDir dirs: file("lib")
 }
 
 dependencies {
@@ -30,10 +33,67 @@ dependencies {
     // Required by Grails' AST transformations, which are included in
     // grails-core.
     provided "commons-lang:commons-lang:2.4",
-             "org.slf4j:slf4j-api:1.5.8",
-             "org.slf4j:slf4j-jdk14:1.5.8",
-             "org.slf4j:jcl-over-slf4j:1.5.8",
+             "org.slf4j:slf4j-api:1.5.10",
+             "org.slf4j:slf4j-jdk14:1.5.10",
+             "org.slf4j:jcl-over-slf4j:1.5.10",
              "org.springframework:spring-web:3.0.0.RELEASE"
+
+    itCompile gradleApi(),
+              "org.gradle:gradle-test:0.9-20100220071335+0000",
+              "org.testng:testng:5.11:jdk15",
+              "org.hamcrest:hamcrest-core:1.1",
+              "org.hamcrest:hamcrest-library:1.1"
+
+    itRuntime "org.apache.ant:ant:1.7.1",
+              // Required by GradleLauncher
+              "asm:asm-all:3.2",
+              "commons-collections:commons-collections:3.2.1",
+              "commons-io:commons-io:1.4",
+              "commons-lang:commons-lang:2.4",
+              "org.slf4j:slf4j-api:1.5.10",
+              "org.slf4j:jul-to-slf4j:1.5.10",
+              "ch.qos.logback:logback-classic:0.9.18",
+              "net.sf.jopt-simple:jopt-simple:3.2",
+              "junit:junit:4.7"
 }
 
-sourceSets.main.compileClasspath += configurations.provided
+sourceSets {
+    main {
+        compileClasspath += configurations.provided
+    }
+    integTest {
+        compileClasspath = configurations.itCompile
+        runtimeClasspath = configurations.itRuntime + sourceSets.integTest.classes
+    }
+}
+
+task integTest(type: AntTest, dependsOn: jar) { //}, dependsOn: [intTestImage, binZip, allZip, srcZip, ':docs:userguideDocbook']) {
+//    integTestUserDir = file('intTestHomeDir')
+//    options.systemProperties['integTest.srcDir'] = file('src').absolutePath
+//    options.systemProperties['integTest.userGuideInfoDir'] = project(':docs').docbookSrc
+//    options.systemProperties['integTest.userGuideOutputDir'] = new File(project(':docs').samplesSrcDir, "userguideOutput").absolutePath
+//    options.systemProperties['integTest.gradleUserHomeDir'] = integTestUserDir.absolutePath
+//    include '**/'
+    useTestNG()
+//    jvmArgs("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5006")
+    
+    testClassesDir = sourceSets.integTest.classesDir
+    classpath = sourceSets.integTest.runtimeClasspath // + configurations.testRuntime
+    testResultsDir = file("${buildDir}/test-results")
+    testReportDir = file("${buildDir}/reports/tests")
+    testSrcDirs = []
+    doFirst {
+        println "Starting integration tests..."
+    }
+//    doFirst {
+//        options.systemProperties['integTest.gradleHomeDir'] = intTestImage.integTestGradleHome.absolutePath
+//        def forkArgs
+//        if (noForkIntegTests()) {
+//            options.systemProperties['org.gradle.integtest.nofork'] = "true"
+//            forkArgs = [forkMode: ForkMode.ONCE, jvmArgs: ['-ea', '-Xmx1024m', '-XX:MaxPermSize=384m', '-XX:+HeapDumpOnOutOfMemoryError']]
+//        } else {
+//            forkArgs = [forkMode: ForkMode.ONCE, jvmArgs: ['-ea', '-Xmx512m', '-XX:+HeapDumpOnOutOfMemoryError']]
+//        }
+//        options.fork(forkArgs)
+//    }
+}

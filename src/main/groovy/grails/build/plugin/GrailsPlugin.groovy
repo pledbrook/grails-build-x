@@ -1,13 +1,18 @@
 package grails.build.plugin
 
+import grails.util.GrailsNameUtils
 import groovy.xml.DOMBuilder
+
 import org.codehaus.groovy.tools.RootLoader
+import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.tasks.Copy
 import org.gradle.api.internal.file.copy.FileCopyActionImpl
 
 class GrailsPlugin implements Plugin<Project> {
+    File metadataFile
+
     void use(Project project) {
         project.with {
             apply id: 'groovy'
@@ -17,8 +22,13 @@ class GrailsPlugin implements Plugin<Project> {
                 grailsHome = System.getProperty("grails.home") ?: System.getenv("GRAILS_HOME")
             }
 
+            grailsVersion = deduceGrailsVersion()
+
             // TODO Find some way of setting the environment properly.
+            if (version == "unspecified") version = "0.1"            
             if (!project.hasProperty("grailsEnv")) grailsEnv = "development"
+            if (!project.hasProperty("projectType")) projectType = "app"
+            if (!project.hasProperty("servletVersion")) servletVersion = "2.5"
 
             war.webAppDir = file("web-app")
 
@@ -68,8 +78,7 @@ class GrailsPlugin implements Plugin<Project> {
                          "org.springframework:spring-web:3.0.0.RELEASE"
 
                 // Insert the plugin as a runtime dependency so that
-                // the project can use its custom classes (that effectively
-                // override the standard Grails ones).
+                // the project can use the plugin's custom classes.
                 def r = getClass().getResource("GrailsPlugin.class")
                 if (r.protocol == "jar") {
                     def path = r.toString() - "jar:"
@@ -79,10 +88,10 @@ class GrailsPlugin implements Plugin<Project> {
                 }
 
                 // Add Grails resources to the classpath so that we can
-                // load them from there. Ideally, 'grailsHome' wouldn't
-                // be added, but unfortunately the current directory
-                // structure of Grails' home and the grails-resources JAR
-                // mean that it's necessary.
+                // load them from there. Ideally, we wouldn't add the
+                // root of Grails home, but unfortunately the current
+                // directory structure of Grails' home and the
+                // grails-resources JAR mean that it's necessary.
                 if (grailsHome) {
                     resources files(grailsHome)
                 }
@@ -96,43 +105,153 @@ class GrailsPlugin implements Plugin<Project> {
                 }
             }
 
-            // Almost all tasks depend on information about the build. This
-            // task loads it up.
-            createBuildDataTask(project)
-            createBuildPluginsTask(project, [ buildData ])
-            createCopyWebXmlTemplateTask(project, [ buildData, buildPlugins, tmpBuildDir ])
-            createGenerateWebXmlTask(project, [ copyWebXmlTemplate ])
-            createGenerateApplicationContextTask(project, [ buildData, buildPlugins ])
-            createCopyJspsTask(project, [])
-            createPackageI18nTask(project, [ buildData ])
-            createRunTask(project, [ compileGroovy, processResources ])
+            task("verifyProjectType") {
+                assert projectType in [ "app", "plugin" ], "Project type is not configured " +
+                        "correctly. It should be one of 'app' or 'plugin'."
+            }
 
             compileGroovy.source sourceSets.main.groovy
             compileGroovy.source projectDir.listFiles({ f ->
                 f.name ==~ /\w+GrailsPlugin.groovy/ } as FileFilter)
 
-            // The i18n and JSP files have to be included in the runtime
-            // classpath, so we add the 'resources' directory now.
-            sourceSets.main.runtimeClasspath += files(packageI18n.destinationDir)
+            // These tasks do not require a project.
+            createProjectStructureTask(project)
+            createInitTask(project)
 
-            // Configure some of the tasks provided by other plugins. The
-            // compile steps require the Grails plugins to be built first.
-            compileJava.dependsOn buildPlugins
-            processResources.dependsOn generateWebXml, generateApplicationContextXml, copyJsps, packageI18n
+            // If this is an empty directory with just a build file,
+            // then 'application.properties' may not exist. In which
+            // case, we don't need to create the tasks that require
+            // a Grails project.
+            metadataFile = file("application.properties")
+            if (metadataFile.exists()) {
+                // Almost all tasks depend on information about the build. This
+                // task loads it up.
+                createBuildDataTask(project)
+                createBuildPluginsTask(project, [ buildData ])
+                createCopyWebXmlTemplateTask(project, [ buildData, buildPlugins, tmpBuildDir ])
+                createGenerateWebXmlTask(project, [ copyWebXmlTemplate ])
+                createGenerateApplicationContextXmlTask(project, [ buildData, buildPlugins ])
+                createCopyJspsTask(project, [])
+                createPackageI18nTask(project, [ buildData ])
+                createRunTask(project, [ compileGroovy, processResources ])
 
-            // We generate some files to web-app/WEB-INF, so we should clear
-            // those out on 'clean'.
-            clean.doLast {
-                ant.delete(file: generateWebXml.targetFile)
-                ant.delete(file: generateApplicationContextXml.targetFile)
-                ant.delete(dir: new File(war.webAppDir, "WEB-INF/grails-app"))
+                // The i18n and JSP files have to be included in the runtime
+                // classpath, so we add the 'resources' directory now.
+                sourceSets.main.runtimeClasspath += files(packageI18n.destinationDir)
+
+                // Configure some of the tasks provided by other plugins. The
+                // compile steps require the Grails plugins to be built first.
+                compileJava.dependsOn buildPlugins
+                processResources.dependsOn generateWebXml, generateApplicationContextXml, copyJsps, packageI18n
+
+                // We generate some files to web-app/WEB-INF, so we should clear
+                // those out on 'clean'.
+                clean.doLast {
+                    ant.delete(file: generateWebXml.targetFile)
+                    ant.delete(file: generateApplicationContextXml.targetFile)
+                    ant.delete(dir: new File(war.webAppDir, "WEB-INF/grails-app"))
+                }
+
+                war {
+                    from webAppDir
+                    webXml = generateWebXml.targetFile
+                }
             }
+        }
+    }
 
-            war {
-                from webAppDir
-                webXml = generateWebXml.targetFile
+    /**
+     * Creates a task that generates a Grails application or plugin in
+     * the project directory.
+     */
+    private createProjectStructureTask(Project project) {
+        project.with {
+            task("projectStructure") << {
+                new File(projectDir, "grails-app/conf/hibernate").mkdirs()
+                new File(projectDir, "grails-app/controllers").mkdirs()
+                new File(projectDir, "grails-app/domain").mkdirs()
+                new File(projectDir, "grails-app/i18n").mkdirs()
+                new File(projectDir, "grails-app/services").mkdirs()
+                new File(projectDir, "grails-app/taglib").mkdirs()
+                new File(projectDir, "grails-app/utils").mkdirs()
+                new File(projectDir, "grails-app/views/layouts").mkdirs()
+                new File(projectDir, "lib").mkdirs()
+                new File(projectDir, "scripts").mkdirs()
+                new File(projectDir, "src/groovy").mkdirs()
+                new File(projectDir, "src/java").mkdirs()
+                new File(projectDir, "test/unit").mkdirs()
+                new File(projectDir, "test/integration").mkdirs()
+                new File(projectDir, "web-app/css").mkdirs()
+                new File(projectDir, "web-app/images").mkdirs()
+                new File(projectDir, "web-app/js").mkdirs()
+                new File(projectDir, "web-app/META-INF").mkdirs()
             }
+        }
+    }
 
+    /**
+     * Creates a task that generates a Grails application or plugin in
+     * the project directory. The type of Grails project to create is
+     * defined by the project property 'projectType', which can have a
+     * value of 'app' or 'plugin'.
+     */
+    private createInitTask(Project project) {
+        project.with {
+            task("init", dependsOn: [ tmpBuildDir, verifyProjectType, projectStructure ]) << {
+                [ "grails-shared-files.jar", "grails-${projectType}-files.jar" ].each { r ->
+                    // Before we can extract the project files, we must copy
+                    // them from grails-resources-*.jar to a temporary
+                    // location. Gradle cannot yet extract an archive from
+                    // the classpath.
+                    def tmpFile = new File(tmpBuildDir.dir, r)
+                    copyToFile resourceAsStream(configurations.resources, r), tmpFile
+
+                    // Now extract the files into the project directory.
+                    copy {
+                        from(zipTree(tmpFile)) {
+                            exclude "META-INF/**"
+                        }
+                        into projectDir
+                    }
+                }
+
+                // Finally, create the application.properties file.
+                def props = new Properties()
+                if (projectType == "app") {
+                    props.setProperty("app.name", project.name)
+                    props.setProperty("app.version", project.version)
+                }
+                props.setProperty("app.grails.version", grailsVersion)
+                props.setProperty("app.servlet.version", servletVersion)
+                props.setProperty("plugins.hibernate", grailsVersion)
+                props.setProperty("plugins.tomcat", grailsVersion)
+                props.store metadataFile.newWriter(), ""
+
+                // Rename the plugin descriptor and fill in the placeholders.
+                if (projectType == "plugin") {
+                    def pluginName = GrailsNameUtils.getNameFromScript(project.name)
+                    if(!(pluginName ==~ /[a-zA-Z-]+/)) {
+                        throw new GradleException("Specified plugin name [${project.name}] is invalid. " +
+                                "Plugin names can only contain word characters separated by hyphens.")
+                    }
+
+                    ant.move(
+                            file: "${projectDir}/GrailsPlugin.groovy",
+                            tofile: "${projectDir}/${pluginName}GrailsPlugin.groovy",
+                            overwrite: true)
+
+                    // Insert the name of the plugin into whatever files need it.
+                    ant.replace(dir:"${projectDir}") {
+                        include(name: "*GrailsPlugin.groovy")
+                        include(name: "scripts/*")
+                        replacefilter(token: "@plugin.name@", value: pluginName)
+                        replacefilter(token: "@plugin.short.name@", value: GrailsNameUtils.getScriptName(pluginName))
+                        replacefilter(token: "@plugin.version@", value: project.version ?: "0.1")
+                        replacefilter(token: "@grails.version@", value: grailsVersion)
+                    }
+
+                }
+            }
         }
     }
 
@@ -142,7 +261,7 @@ class GrailsPlugin implements Plugin<Project> {
                 // Start by loading the application metadata from
                 // application.properties.
                 def metadata = new Properties()
-                metadata.load(file("application.properties").newReader())
+                metadata.load(metadataFile.newReader())
 
                 appName = metadata.getProperty("app.name")
                 appVersion = metadata.getProperty("app.version")
@@ -239,7 +358,7 @@ class GrailsPlugin implements Plugin<Project> {
         }
     }
 
-    private createGenerateApplicationContextTask(project, dependsOn) {
+    private createGenerateApplicationContextXmlTask(project, dependsOn) {
         project.with {
             task("generateApplicationContextXml", dependsOn: dependsOn) {
                 template = "applicationContext.xml"
@@ -336,6 +455,21 @@ class GrailsPlugin implements Plugin<Project> {
 
     private createRunTask(project, dependsOn) {
         project.task("run", type: RunServletContainerTask, dependsOn: dependsOn)
+    }
+
+    private String deduceGrailsVersion() {
+        def resources = getClass().classLoader.getResources("build.properties")
+        for (URL r in resources) {
+            def props = new Properties()
+            props.load(r.openStream())
+
+            def grailsVersion = props.getProperty("grails.version")
+            if (grailsVersion) {
+                return grailsVersion
+            }
+        }
+
+        throw new RuntimeException("Cannot find grails-bootstrap-*.jar on the classpath.")
     }
 
     private void writeDomToFile(dom, destFile) {
