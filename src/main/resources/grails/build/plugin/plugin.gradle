@@ -8,9 +8,10 @@ buildscript {
     }
 }
 
-apply id: 'groovy'
+apply plugin: 'groovy'
 
 configurations {
+    docs { transitive = true }
     plugin { transitive = false }
     provided { transitive = false }
 }
@@ -173,6 +174,8 @@ class DependencyHandlerAdapter {
     def delegate
     def convertToProvided
 
+    final defaultDependenciesProvided = false
+
     DependencyHandlerAdapter(delegate, convertToProvided = false) {
         this.delegate = delegate
         this.convertToProvided = convertToProvided
@@ -194,7 +197,6 @@ class DependencyHandlerAdapter {
     void runtime(Object[] args) {
         if (convertToProvided) this.methodMissing("provided", args)
         else {
-            println ">> Runtime dependency: \$args"
             this.methodMissing("runtime", args)
         }
     }
@@ -241,6 +243,10 @@ class RepositoryHandlerAdapter {
     }
 
     void grailsPlugins() {
+    }
+
+    // Grails Central Plugin repository.
+    void grailsCentral() {
     }
 
     void mavenCentral() {

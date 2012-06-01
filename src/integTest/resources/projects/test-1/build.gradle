@@ -1,0 +1,15 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "org.grails:grails-bootstrap:1.2.0", "org.grails:grails-core:1.2.0", ":grails-build:"
+    }
+}
+
+apply id: 'grails-ex'
+
+dependencies {
+    compile "org.grails:grails-core:1.2.0"
+}

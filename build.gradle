@@ -1,4 +1,5 @@
-apply id: 'groovy'
+apply plugin: 'groovy'
+apply plugin: 'project-report'
 
 configurations {
     provided { transitive = false }
@@ -8,6 +9,7 @@ configurations {
 
 repositories {
     mavenCentral()
+//    mavenRepo urls: "http://repository.jboss.org/nexus/content/groups/public/"
     flatDir dirs: file("lib")
 }
 
@@ -16,27 +18,31 @@ dependencies {
 
     compile configurations.groovy,
             gradleApi(),
-            "org.grails:grails-bootstrap:1.2.0",
-            "org.grails:grails-core:1.2.0",
-            "org.grails:grails-spring:1.2.0",
-            "org.springframework:spring-context:3.0.0.RELEASE",
-            "org.springframework:spring-core:3.0.0.RELEASE"
+            "org.grails:grails-bootstrap:1.3.3",
+//            "org.grails:grails-spring:1.3.3",
+            "org.springframework:spring-context:3.0.3.RELEASE",
+            "org.springframework:spring-core:3.0.3.RELEASE"
 
-    runtime "org.grails:grails-resources:1.2.0"
+    compile "org.grails:grails-core:1.3.3", {
+        exclude module: "netty"
+        exclude module: "jsr166y"
+    }
+
+    runtime "org.grails:grails-resources:1.3.3"
 
     provided "javax.servlet:servlet-api:2.5"
     
     // Required by the Groovy compiler, but the code has no explicit
     // dependency on these.
-    provided "org.springframework:spring-beans:3.0.0.RELEASE"
+    provided "org.springframework:spring-beans:3.0.3.RELEASE"
 
     // Required by Grails' AST transformations, which are included in
     // grails-core.
     provided "commons-lang:commons-lang:2.4",
              "org.slf4j:slf4j-api:1.5.10",
              "org.slf4j:slf4j-jdk14:1.5.10",
-             "org.slf4j:jcl-over-slf4j:1.5.10",
-             "org.springframework:spring-web:3.0.0.RELEASE"
+             "org.slf4j:jcl-over-slf4j:1.5.10"//,
+//             "org.springframework:spring-web:3.0.0.RELEASE"
 
     itCompile gradleApi(),
               "org.gradle:gradle-test:0.9-20100220071335+0000",
@@ -66,14 +72,16 @@ sourceSets {
         runtimeClasspath = configurations.itRuntime + sourceSets.integTest.classes
     }
 }
-
+/*
 task integTest(type: AntTest, dependsOn: jar) { //}, dependsOn: [intTestImage, binZip, allZip, srcZip, ':docs:userguideDocbook']) {
 //    integTestUserDir = file('intTestHomeDir')
 //    options.systemProperties['integTest.srcDir'] = file('src').absolutePath
 //    options.systemProperties['integTest.userGuideInfoDir'] = project(':docs').docbookSrc
 //    options.systemProperties['integTest.userGuideOutputDir'] = new File(project(':docs').samplesSrcDir, "userguideOutput").absolutePath
 //    options.systemProperties['integTest.gradleUserHomeDir'] = integTestUserDir.absolutePath
+*/
 //    include '**/'
+/*
     useTestNG()
 //    jvmArgs("-Xdebug", "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5006")
     
@@ -97,3 +105,4 @@ task integTest(type: AntTest, dependsOn: jar) { //}, dependsOn: [intTestImage, b
 //        options.fork(forkArgs)
 //    }
 }
+*/

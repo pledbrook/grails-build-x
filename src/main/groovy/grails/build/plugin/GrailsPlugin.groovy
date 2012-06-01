@@ -14,10 +14,10 @@ import org.gradle.api.file.FileCollection
 class GrailsPlugin implements Plugin<Project> {
     File metadataFile
 
-    void use(Project project) {
+    void apply(Project project) {
         project.with {
-            apply id: 'groovy'
-            apply id: 'war'
+            apply plugin: 'groovy'
+            apply plugin: 'war'
 
             if (!project.hasProperty("grailsHome")) {
                 grailsHome = System.getProperty("grails.home") ?: System.getenv("GRAILS_HOME")
@@ -53,7 +53,7 @@ class GrailsPlugin implements Plugin<Project> {
             // A Grails project has a rather distinctive directory structure,
             // but it is at heart a straight WAR project. This sets up the
             // source directories.
-            sourceSets {
+            project.sourceSets {
                 main {
                     groovy {
                         def grailsAppDirs = file("grails-app").listFiles({ f -> f.directory } as FileFilter)
@@ -63,15 +63,15 @@ class GrailsPlugin implements Plugin<Project> {
                 }
             }
 
-            dependencies {
-                groovy  "org.codehaus.groovy:groovy:1.7.0"
-                compile "org.grails:grails-bootstrap:1.2.0"
+            project.dependencies {
+                groovy  "org.codehaus.groovy:groovy:1.7.5"
+                compile "org.grails:grails-bootstrap:$grailsVersion"
 
                 // Required by Grails' AST transformations.
                 provided "commons-lang:commons-lang:2.4",
                          "javax.servlet:servlet-api:2.5",
                          "log4j:log4j:1.2.14",
-                         "org.grails:grails-spring:1.2.0",
+                         "org.grails:grails-spring:$grailsVersion",
                          "org.slf4j:slf4j-api:1.5.8",
                          "org.slf4j:slf4j-jdk14:1.5.8",
                          "org.slf4j:jcl-over-slf4j:1.5.8",
@@ -96,10 +96,10 @@ class GrailsPlugin implements Plugin<Project> {
                 if (grailsHome) {
                     resources files(grailsHome)
                 }
-                resources "org.grails:grails-resources:1.2.0"
+                resources "org.grails:grails-resources:$grailsVersion"
             }
 
-            task("tmpBuildDir") {
+            project.task("tmpBuildDir") {
                 dir = new File(buildDir, "tmp")
                 doLast {
                     ant.mkdir dir: dir

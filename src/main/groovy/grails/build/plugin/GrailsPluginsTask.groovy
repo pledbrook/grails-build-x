@@ -7,7 +7,6 @@ import org.gradle.api.Project
 import org.gradle.api.internal.AbstractTask
 import org.gradle.api.tasks.TaskAction
 import org.gradle.groovy.scripts.StringScriptSource
-import org.gradle.initialization.DefaultCacheInvalidationStrategy
 import org.gradle.initialization.DefaultGradleLauncherFactory
 import org.gradle.util.GFileUtils
 import groovy.text.SimpleTemplateEngine
@@ -46,14 +45,6 @@ Grails settings: Base dir = ${settings.baseDir}
             buildParameters.currentDir = plugin.pluginDirectory
             buildParameters.searchUpwards = false
             buildParameters.taskNames = [ "exportedClasses" ]
-            boolean executeBuild = true
-
-            // Don't bother building the project if nothing's changed.
-            File markerFile = new File(buildParameters.currentDir, "build/COMPLETED")
-            if (buildParameters.cacheUsage == CacheUsage.ON
-                    && new DefaultCacheInvalidationStrategy().isValid(markerFile, buildParameters.currentDir)) {
-                executeBuild = false
-            }
 
             // If the plugin has a 'build.gradle' file, use that, otherwise
             // use a standard build script packaged with this Gradle plugin.
@@ -78,18 +69,7 @@ Grails settings: Base dir = ${settings.baseDir}
             // Now we build the plugin by creating a new Gradle launcher
             // to execute the build in the plugin's directory.
             def gradleLauncher = new DefaultGradleLauncherFactory().newInstance(buildParameters)
-
-            BuildResult buildResult
-            if (executeBuild) {
-                buildResult = gradleLauncher.run()
-            }
-            else {
-                // If we don't need to build the plugin, we still need its
-                // dependencies and classpaths.
-                buildResult = gradleLauncher.getBuildAnalysis()
-            }
-            buildResult.rethrowFailure()
-            GFileUtils.touch(markerFile)
+            BuildResult buildResult = gradleLauncher.run().rethrowFailure()
 
             // Make the plugin's project instance available from the root
             // project. Then, if the Grails plugin has a Gradle Plugin
@@ -97,6 +77,7 @@ Grails settings: Base dir = ${settings.baseDir}
             // Gradle plugin has no way of finding out about its own project.
             def pluginProject = buildResult.gradle.rootProject
             project.grailsPlugins[plugin.name] = pluginProject
+            project.currentPlugin = pluginProject
 
             // Find out whether the plugin implements a Gradle plugin. If
             // it does, execute it now.
@@ -105,8 +86,8 @@ Grails settings: Base dir = ${settings.baseDir}
             // there is an associated Gradle plugin.
             def pluginConfig = loadBuildConfig(plugin, metadata, settings)
             if (pluginConfig?.plugin?.buildPluginClass) {
-                // We will load the plugin within the context of the plugin's
-                // runtime classpath.
+                // We will load the plugin's Gradle plugin within the context of
+                // the Grails plugin's runtime classpath.
                 def pluginBuildClasspath = buildResult.gradle.rootProject.sourceSets.plugin.
                         runtimeClasspath.filter { it != null }.files
 
@@ -117,7 +98,7 @@ Grails settings: Base dir = ${settings.baseDir}
                 try {
                     // Load and (manually) execute the Gradle plugin.
                     def buildPlugin = cl.loadClass(pluginConfig.plugin.buildPluginClass).newInstance()
-                    buildPlugin.use(project)
+                    buildPlugin.apply(project)
                 }
                 catch (ClassNotFoundException ex) {
                     throw new RuntimeException("[GrailsPlugin] Can't find configured build plugin " +
